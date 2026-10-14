@@ -514,3 +514,19 @@ The portal grant may cover all outputs even though this server consumes only
 the selected stream; this option is a routing limit, not an OS permission limit.
 Without this variable, upstream behavior is preserved. Restart the MCP server
 after changing the output selection or display configuration.
+
+## Optional smooth pointer feedback (PatLeGrand fork)
+
+`COMPUTER_USE_MCP_SMOOTH_POINTER=1` enables animated absolute pointer events
+through the existing portal/EIS route. The Activity Halo companion must be
+running and provide a live cursor position on its private runtime socket.
+The reported output name and geometry must exactly match the bound EIS region.
+The current position and destination must both lie inside that region; a pointer
+on the secondary monitor is refused rather than teleported. Missing feedback
+fails closed. Private background workers do not inherit this option.
+
+Generated input is interpolated at approximately 60 Hz, with bounded duration,
+while retaining session checks, serialized input and cancellation cleanup.
+The companion is a local, same-user position provider; it does not grant portal
+permissions or send input. This opt-in integration adds a trust dependency on
+the companion and is not a guarantee of detecting physical user takeover.

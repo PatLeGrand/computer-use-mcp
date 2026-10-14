@@ -66,8 +66,14 @@ fn validate_cursor(region: &EisRegion, sample: &Value) -> Result<(f64, f64), Str
     {
         return Err("cursor feedback geometry differs from the approved EIS region".into());
     }
-    let x = sample.get("x").and_then(Value::as_f64).ok_or("cursor x is missing")?;
-    let y = sample.get("y").and_then(Value::as_f64).ok_or("cursor y is missing")?;
+    let x = sample
+        .get("x")
+        .and_then(Value::as_f64)
+        .ok_or("cursor x is missing")?;
+    let y = sample
+        .get("y")
+        .and_then(Value::as_f64)
+        .ok_or("cursor y is missing")?;
     if !contains(region, (x, y)) {
         return Err("cursor feedback lies outside the selected EIS region".into());
     }
@@ -76,12 +82,19 @@ fn validate_cursor(region: &EisRegion, sample: &Value) -> Result<(f64, f64), Str
 
 fn contains(region: &EisRegion, point: (f64, f64)) -> bool {
     let (left, top) = (f64::from(region.position.0), f64::from(region.position.1));
-    point.0.is_finite() && point.1.is_finite()
-        && point.0 >= left && point.0 < left + f64::from(region.size.0)
-        && point.1 >= top && point.1 < top + f64::from(region.size.1)
+    point.0.is_finite()
+        && point.1.is_finite()
+        && point.0 >= left
+        && point.0 < left + f64::from(region.size.0)
+        && point.1 >= top
+        && point.1 < top + f64::from(region.size.1)
 }
 
-pub fn trajectory(region: &EisRegion, from: (f64, f64), to: (f64, f64)) -> Result<Vec<(f64, f64)>, String> {
+pub fn trajectory(
+    region: &EisRegion,
+    from: (f64, f64),
+    to: (f64, f64),
+) -> Result<Vec<(f64, f64)>, String> {
     if !contains(region, from) || !contains(region, to) {
         return Err("animated pointer path would leave the selected screen".into());
     }
@@ -90,11 +103,16 @@ pub fn trajectory(region: &EisRegion, from: (f64, f64), to: (f64, f64)) -> Resul
         return Ok(vec![to]);
     }
     let steps = ((distance / 1500.0).clamp(0.12, 0.65) * 60.0).ceil() as usize;
-    Ok((1..=steps).map(|step| {
-        let t = step as f64 / steps as f64;
-        let eased = t * t * (3.0 - 2.0 * t);
-        (from.0 + (to.0 - from.0) * eased, from.1 + (to.1 - from.1) * eased)
-    }).collect())
+    Ok((1..=steps)
+        .map(|step| {
+            let t = step as f64 / steps as f64;
+            let eased = t * t * (3.0 - 2.0 * t);
+            (
+                from.0 + (to.0 - from.0) * eased,
+                from.1 + (to.1 - from.1) * eased,
+            )
+        })
+        .collect())
 }
 
 #[cfg(test)]
@@ -103,17 +121,22 @@ mod tests {
     use serde_json::json;
 
     fn region() -> EisRegion {
-        EisRegion { position: (100, 0), size: (1920, 1080), mapping_id: Some("HDMI-A-1".into()) }
+        EisRegion {
+            position: (100, 0),
+            size: (1920, 1080),
+            mapping_id: Some("HDMI-A-1".into()),
+        }
     }
 
     #[test]
     fn cursor_feedback_requires_same_output_and_geometry() {
-        let mut sample = json!({"screen":"HDMI-A-1", "position":[100,0], "size":[1920,1080], "x":500,"y":400});
+        let mut sample =
+            json!({"screen":"HDMI-A-1", "position":[100,0], "size":[1920,1080], "x":500,"y":400});
         assert_eq!(validate_cursor(&region(), &sample).unwrap(), (500.0, 400.0));
         sample["screen"] = json!("eDP-1");
         assert!(validate_cursor(&region(), &sample).is_err());
         sample["screen"] = json!("HDMI-A-1");
-        sample["size"] = json!([960,540]);
+        sample["size"] = json!([960, 540]);
         assert!(validate_cursor(&region(), &sample).is_err());
     }
 
@@ -123,7 +146,10 @@ mod tests {
         assert_eq!(path.last(), Some(&(2019.0, 1079.0)));
         assert!(path.len() > 10 && path.len() <= 40);
         assert!(path.iter().all(|point| contains(&region(), *point)));
-        assert!(path.windows(2).all(|pair| pair[0].0 <= pair[1].0 && pair[0].1 <= pair[1].1));
+        assert!(
+            path.windows(2)
+                .all(|pair| pair[0].0 <= pair[1].0 && pair[0].1 <= pair[1].1)
+        );
         assert!(trajectory(&region(), (99.0, 0.0), (500.0, 400.0)).is_err());
         assert!(trajectory(&region(), (500.0, 400.0), (2020.0, 400.0)).is_err());
         assert!(trajectory(&region(), (f64::NAN, 0.0), (500.0, 400.0)).is_err());
