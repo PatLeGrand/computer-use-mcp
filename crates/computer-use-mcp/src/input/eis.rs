@@ -1175,6 +1175,23 @@ impl InputBackend for ReisInputBackend {
         Box::pin(async move {
             let _serial = self.serial.lock().await;
             let mode = self.transaction_mode()?;
+            if mode == InputMode::Pointer && super::feedback::smooth_pointer_enabled()
+                && let InputEvent::Absolute { x, y } = event
+            {
+                let region = {
+                    let state = self.state.lock().map_err(|_| "EIS state mutex poisoned".to_owned())?;
+                    self.pointer_device_for_action(&state)?.region
+                };
+                let from = super::feedback::cursor_position(&region).await?;
+                let path = super::feedback::trajectory(&region, from, (x, y))?;
+                for (index, &(x, y)) in path.iter().enumerate() {
+                    self.emit_inner_for_mode(mode, InputEvent::Absolute { x, y })?;
+                    if index + 1 < path.len() {
+                        tokio::time::sleep(Duration::from_millis(16)).await;
+                    }
+                }
+                return Ok(());
+            }
             self.emit_inner_for_mode(mode, event)
         })
     }
