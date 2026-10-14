@@ -1,6 +1,7 @@
 pub mod backend;
 pub mod coordinates;
 pub mod eis;
+pub mod feedback;
 pub mod keyboard;
 pub mod keyboard_input;
 pub mod pointer;

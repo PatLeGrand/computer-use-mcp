@@ -166,7 +166,7 @@ known local approval failures retry within a 45-second deadline with bounded
 1/2/4/8-second backoff. Cancellation, shutdown, and worker termination stop
 the request. Approval exhaustion or revocation retires that worker, making its
 IDs stale. An explicit discovery or launch creates a replacement without an
-MCP restart. Human activity pauses foreground mutations until 60 seconds of
+MCP restart. Human activity pauses foreground mutations until 5 seconds of
 quiet. Use `wait_for` with `condition: {"type":"human_idle"}`, then observe
 fresh state before acting; ordinary human activity does not require a restart.
 

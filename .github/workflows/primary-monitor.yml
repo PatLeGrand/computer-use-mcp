@@ -2,7 +2,7 @@ name: Primary monitor validation
 on:
   workflow_dispatch:
   push:
-    branches: [codex/primary-monitor]
+    branches: [codex/primary-monitor, codex/desktop-feedback]
 permissions:
   contents: read
 jobs:

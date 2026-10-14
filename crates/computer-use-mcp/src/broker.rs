@@ -262,6 +262,7 @@ impl Worker {
             command.env_remove("COMPUTER_USE_MCP_BIN");
             // A foreground output name must not select a private desktop stream.
             command.env_remove("COMPUTER_USE_MCP_MONITOR");
+            command.env_remove("COMPUTER_USE_MCP_SMOOTH_POINTER");
             command.env("COMPUTER_USE_MCP_PRIVATE_PORTAL_AUTH", "require");
             command
         } else {
