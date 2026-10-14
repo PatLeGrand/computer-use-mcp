@@ -1,0 +1,50 @@
+name: Primary monitor validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/primary-monitor]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          components: clippy,rustfmt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends build-essential clang libclang-dev libdbus-1-dev libglib2.0-dev libpipewire-0.3-dev libspa-0.2-dev libxkbcommon-dev pkg-config
+      - name: Format and record source patch
+        run: |
+          cargo fmt --all
+          git diff -- crates > /tmp/format.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatting
+          path: /tmp/format.patch
+      - name: Verify Rust and guidance
+        run: |
+          cargo fmt --all -- --check
+          bash scripts/check-guidance.sh
+          cargo clippy --locked --workspace --all-features --all-targets -- -D warnings
+          cargo test --locked --workspace --all-features
+      - name: Build and test package
+        run: |
+          npm pack
+          mkdir -p target/npm-package-test
+          tar -xzf mirsella-opencode-computer-use-mcp-*.tgz -C target/npm-package-test
+          COMPUTER_USE_MCP_PACKAGE_DIR=target/npm-package-test/package npm test
+          python3 -B -m unittest discover -s scripts -p 'test_model_smoke.py'
+          sha256sum mirsella-opencode-computer-use-mcp-*.tgz > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: primary-monitor-package
+          path: |
+            mirsella-opencode-computer-use-mcp-*.tgz
+            SHA256SUMS

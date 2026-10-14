@@ -250,3 +250,22 @@ automation, and a standalone desktop UI are not supported.
 - [SECURITY.md](SECURITY.md): trust boundary and residual risks
 - [ARCHITECTURE.md](ARCHITECTURE.md): implementation and invariants
 - [DEVELOPMENT.md](DEVELOPMENT.md): contributor workflow and checks
+
+## Select one physical monitor (PatLeGrand fork)
+
+Set `COMPUTER_USE_MCP_MONITOR=HDMI-A-1` before starting the foreground MCP
+server to capture and control only that output while other displays stay on.
+Use the output name shown by `kscreen-doctor -o`. This is an explicit output
+selection, not an automatic primary-monitor detector; update it if the primary
+output changes.
+
+On KDE, the server requests separate monitor streams and selects the exact
+portal-provided `mapping_id`. Missing or duplicate IDs fail closed. It does not
+infer coordinates from a screenshot or crop a combined desktop. Existing EIS
+routing, consent, stale-frame checks and input cleanup remain active. Private
+background workers do not inherit this foreground output selection.
+
+The portal grant may cover all outputs even though this server consumes only
+the selected stream; this option is a routing limit, not an OS permission limit.
+Without this variable, upstream behavior is preserved. Restart the MCP server
+after changing the output selection or display configuration.
