@@ -2298,9 +2298,15 @@ mod tests {
             .map(|(index, id)| {
                 let mut properties = HashMap::new();
                 properties.insert("source_type".to_owned(), OwnedValue::from(1_u32));
-                properties.insert("pipewire-serial".to_owned(), OwnedValue::from(400_u64 + index as u64));
+                properties.insert(
+                    "pipewire-serial".to_owned(),
+                    OwnedValue::from(400_u64 + index as u64),
+                );
                 if let Some(id) = id {
-                    properties.insert("mapping_id".to_owned(), OwnedValue::try_from(Value::from(*id)).unwrap());
+                    properties.insert(
+                        "mapping_id".to_owned(),
+                        OwnedValue::try_from(Value::from(*id)).unwrap(),
+                    );
                 }
                 (10_u32 + index as u32, properties)
             })
@@ -2314,7 +2320,8 @@ mod tests {
             monitor_streams(&[Some("eDP-1"), Some("HDMI-A-1")]),
             6,
             Some("HDMI-A-1"),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(selected.node_id, 11);
         assert_eq!(selected.stream_index, 1);
         assert_eq!(selected.mapping_id.as_deref(), Some("HDMI-A-1"));
@@ -2322,13 +2329,18 @@ mod tests {
             monitor_streams(&[Some("HDMI-A-1"), Some("eDP-1")]),
             6,
             Some("HDMI-A-1"),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(selected.node_id, 10);
     }
 
     #[test]
     fn missing_or_ambiguous_monitor_never_falls_back_to_another_screen() {
-        for ids in [vec![Some("eDP-1")], vec![None], vec![Some("HDMI-A-1"), Some("HDMI-A-1")]] {
+        for ids in [
+            vec![Some("eDP-1")],
+            vec![None],
+            vec![Some("HDMI-A-1"), Some("HDMI-A-1")],
+        ] {
             assert!(parse_streams_for_monitor(monitor_streams(&ids), 6, Some("HDMI-A-1")).is_err());
         }
         assert!(parse_streams_for_monitor(monitor_streams(&[]), 6, Some("HDMI-A-1")).is_err());
@@ -2336,9 +2348,7 @@ mod tests {
 
     #[test]
     fn unconfigured_monitor_keeps_single_stream_policy() {
-        assert!(parse_streams_for_monitor(
-            monitor_streams(&[Some("HDMI-A-1")]), 6, None,
-        ).is_ok());
+        assert!(parse_streams_for_monitor(monitor_streams(&[Some("HDMI-A-1")]), 6, None,).is_ok());
         assert!(parse_streams_for_monitor(
             monitor_streams(&[Some("HDMI-A-1"), Some("eDP-1")]), 6, None,
         ).is_err());
