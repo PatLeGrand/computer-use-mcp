@@ -117,7 +117,7 @@ The runtime attempts generated-input cleanup and desktop restoration, reporting
 their result separately from dispatch. Interrupted operations stay aborted;
 cleanup cannot retract delivered events. Read-only calls remain available.
 
-Mutations may resume after 60 seconds of quiet with observed physical keys
+Mutations may resume after 5 seconds of quiet with observed physical keys
 released. Cooperative handoff signals block until cleared, then start a quiet
 period. The explicit `human_idle` wait reports unavailable physical monitoring
 rather than claiming idle. Resumption requires a fresh observation, without an
