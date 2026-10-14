@@ -7194,7 +7194,7 @@ pub(crate) mod tests {
             .execute_call(ToolCall::WaitFor {
                 target: None,
                 condition: WaitCondition::HumanIdle,
-                timeout_ms: 59_000,
+                timeout_ms: 4_000,
             })
             .await
             .unwrap()
@@ -7273,7 +7273,7 @@ pub(crate) mod tests {
         assert_eq!(busy["satisfied"], false);
         assert_eq!(busy["evidence"]["available"], false);
         assert_eq!(busy["evidence"]["reason"], "quiet_period");
-        assert_eq!(busy["evidence"]["remaining_ms"], 60_000);
+        assert_eq!(busy["evidence"]["remaining_ms"], 5_000);
         runtime.takeover.make_available();
         runtime.takeover.trip();
         let start = tokio::time::Instant::now();
@@ -7284,7 +7284,7 @@ pub(crate) mod tests {
                 timeout_ms: 120_000,
             }),
             async {
-                sleep(Duration::from_secs(30)).await;
+                sleep(Duration::from_secs(2)).await;
                 runtime.takeover.trip();
             }
         );
@@ -7292,7 +7292,7 @@ pub(crate) mod tests {
             output.unwrap().structured_content.unwrap()["satisfied"],
             true
         );
-        assert_eq!(start.elapsed(), Duration::from_secs(90));
+        assert_eq!(start.elapsed(), Duration::from_secs(7));
     }
 
     #[tokio::test]
