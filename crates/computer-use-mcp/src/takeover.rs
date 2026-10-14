@@ -13,7 +13,7 @@
 //!    `/dev/input/event*` character devices for key/relative/absolute
 //!    activity. Agent input flows through the compositor's virtual EIS
 //!    channel and never appears in `/dev/input`, so any such event is human
-//!    (or another physical seat actor) and starts a 60-second quiet period.
+//!    (or another physical seat actor) and starts a 5-second quiet period.
 //!    Device permissions must allow reads. Missing devices and poll failures
 //!    are retried for the lifetime of the foreground runtime, including between
 //!    calls. Verified isolated displays never watch physical devices. Runtime
@@ -79,7 +79,7 @@ const MAX_WATCHED_DEVICES: usize = 64;
 /// is open yet.
 const POLL_RESCAN_INTERVAL: Duration = Duration::from_millis(50);
 /// Foreground input may resume only after this much quiet following activity.
-pub const HUMAN_IDLE_INTERVAL: Duration = Duration::from_secs(60);
+pub const HUMAN_IDLE_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Linux `input_event` types relevant to takeover detection.
 pub const EV_SYN: u16 = 0;
@@ -889,7 +889,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn physical_activity_clears_after_a_full_minute_without_reset() {
+    async fn physical_activity_clears_after_a_five_seconds_without_reset() {
         let monitor = TakeoverMonitor::new();
         assert!(
             !takeover_requested(),
@@ -899,7 +899,7 @@ mod tests {
         monitor.trip();
         assert!(monitor.is_active());
         let paused_generation = monitor.status().generation;
-        tokio::time::advance(Duration::from_secs(59)).await;
+        tokio::time::advance(Duration::from_secs(4)).await;
         assert!(monitor.is_active());
         assert_eq!(monitor.status().remaining, Duration::from_secs(1));
         tokio::time::advance(Duration::from_secs(1)).await;
@@ -937,20 +937,20 @@ mod tests {
             parse_input_event(&encode_event(EV_KEY, 30, 0)),
             Instant::now(),
         );
-        tokio::time::advance(Duration::from_secs(59)).await;
+        tokio::time::advance(Duration::from_secs(4)).await;
         activity.event(
             path,
             parse_input_event(&encode_event(EV_REL, 0, 3)),
             Instant::now(),
         );
-        tokio::time::advance(Duration::from_secs(59)).await;
+        tokio::time::advance(Duration::from_secs(4)).await;
         assert!(activity.status(false, Instant::now()).busy());
         tokio::time::advance(Duration::from_secs(1)).await;
         assert!(!activity.status(false, Instant::now()).busy());
     }
 
     #[tokio::test(start_paused = true)]
-    async fn cooperative_handoff_blocks_until_cleared_then_waits_a_minute() {
+    async fn cooperative_handoff_blocks_until_cleared_then_waits_five_seconds() {
         let monitor = TakeoverMonitor::new();
         monitor.manual.store(true, Ordering::Release);
         assert_eq!(monitor.status().state, HumanInputState::HandoffRequested);

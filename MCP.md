@@ -382,7 +382,7 @@ Human idle:
 ```
 
 This targetless, foreground-only condition does not accept `desktop`. It waits
-until 60 seconds have passed since the last detected physical activity, all
+until 5 seconds have passed since the last detected physical activity, all
 observed physical keys and buttons are released, and no cooperative handoff
 signal is asserted. New activity restarts the quiet period. Clearing a handoff
 signal starts a fresh quiet period. A newly started monitor with no detected
@@ -426,7 +426,7 @@ attempts held-input cleanup and desktop restoration. The interrupted operation
 stays aborted. Outcomes retain actual dispatch progress; cleanup cannot retract
 delivered input. Read-only discovery, observation, and waits remain available.
 
-After the 60-second quiet period, a new mutation may proceed without restarting
+After the 5-second quiet period, a new mutation may proceed without restarting
 MCP. Observations from before or during the pause become stale. Use
 `wait_for human_idle`, then observe again, or hand control to the user. Background
 use requires the user's request; human activity never changes the desktop route.

@@ -77,7 +77,7 @@ impl RuntimeError {
             "human input is active or recent; agent dispatch was refused or interrupted; inspect action progress for dispatch and cleanup status",
             ToolOutcome::NotStarted,
             false,
-            "Pause foreground actions. Call wait_for with condition {\"type\":\"human_idle\"} and timeout_ms 120000, or hand control to the user. After satisfied=true, observe fresh state before deciding whether another action is needed. Human activity requires 60 seconds of quiet; cooperative handoff signals must be cleared. An interrupted action is never replayed automatically.",
+            "Pause foreground actions. Call wait_for with condition {\"type\":\"human_idle\"} and timeout_ms 120000, or hand control to the user. After satisfied=true, observe fresh state before deciding whether another action is needed. Human activity requires 5 seconds of quiet; cooperative handoff signals must be cleared. An interrupted action is never replayed automatically.",
         )
     }
 
