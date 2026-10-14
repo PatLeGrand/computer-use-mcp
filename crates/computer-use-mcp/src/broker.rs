@@ -260,6 +260,8 @@ impl Worker {
             // A user's standalone runner override must not change the worker
             // executable or protocol of the installed broker.
             command.env_remove("COMPUTER_USE_MCP_BIN");
+            // A foreground output name must not select a private desktop stream.
+            command.env_remove("COMPUTER_USE_MCP_MONITOR");
             command.env("COMPUTER_USE_MCP_PRIVATE_PORTAL_AUTH", "require");
             command
         } else {

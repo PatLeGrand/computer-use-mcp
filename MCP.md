@@ -495,3 +495,22 @@ or retry semantics. `doctor` reports the history directory.
 | Coordinates are invalid | Use the returned PNG dimensions and half-open bounds from the exact source frame. |
 | Outcome is `unknown` or `completed` | Observe current state before deciding whether another action is needed. |
 | `HumanInputBusy` | Pause foreground actions. Wait for `human_idle`, then observe fresh state; no restart is needed. Clear an asserted handoff signal before resuming. |
+
+## Select one physical monitor (PatLeGrand fork)
+
+Set `COMPUTER_USE_MCP_MONITOR=HDMI-A-1` before starting the foreground MCP
+server to capture and control only that output while other displays stay on.
+Use the output name shown by `kscreen-doctor -o`. This is an explicit output
+selection, not an automatic primary-monitor detector; update it if the primary
+output changes.
+
+On KDE, the server requests separate monitor streams and selects the exact
+portal-provided `mapping_id`. Missing or duplicate IDs fail closed. It does not
+infer coordinates from a screenshot or crop a combined desktop. Existing EIS
+routing, consent, stale-frame checks and input cleanup remain active. Private
+background workers do not inherit this foreground output selection.
+
+The portal grant may cover all outputs even though this server consumes only
+the selected stream; this option is a routing limit, not an OS permission limit.
+Without this variable, upstream behavior is preserved. Restart the MCP server
+after changing the output selection or display configuration.
