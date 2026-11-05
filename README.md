@@ -1,6 +1,6 @@
 # Computer Use MCP
 
-[![CI](https://github.com/mirsella/computer-use-mcp/actions/workflows/publish.yml/badge.svg)](https://github.com/mirsella/computer-use-mcp/actions/workflows/publish.yml)
+[![CI](https://github.com/PatLeGrand/computer-use-mcp/actions/workflows/publish.yml/badge.svg)](https://github.com/PatLeGrand/computer-use-mcp/actions/workflows/publish.yml)
 
 A local [Model Context Protocol](https://modelcontextprotocol.io/) server for
 computer use on KDE Plasma Wayland. It is designed for a trusted local MCP
@@ -43,19 +43,37 @@ runtime prerequisites.
 
 ## Install
 
-Run the precompiled npm package with Node.js 22 or newer:
+Download the tested `.tgz` and `SHA256SUMS` from this fork's
+[GitHub Releases](https://github.com/PatLeGrand/computer-use-mcp/releases).
+Verify `sha256sum --check SHA256SUMS` in the download directory, then extract
+the archive into a permanent directory. It includes the Linux x64 executable,
+Codex integration, Python feedback proxy, OpenCode adapter and canonical skill.
+Python 3.12 or newer is required for the release installer; the proxy uses only
+the Python standard library. The optional Activity Halo is a separate companion.
+
+From this checkout, install a downloaded release with:
 
 ```sh
-npx -y @mirsella/opencode-computer-use-mcp version
-npx -y @mirsella/opencode-computer-use-mcp mcp
+python3 scripts/install-codex.py /path/to/patlegrand-computer-use-mcp-0.8.2.tgz \
+  --monitor HDMI-A-1 --smooth-pointer
 ```
 
-Or build and install the binary from the repository:
+Omit the two options to use portal-selected capture without pointer animation.
+The installer saves optional output settings in the installed `.mcp.json`, adds
+the versioned local marketplace with the Codex CLI, and installs the plugin.
+Restart the desktop app after updating. No user-specific paths or output names
+are embedded in the distributed package.
+
+Source builds are also supported:
 
 ```sh
-cargo install --locked --git https://github.com/mirsella/computer-use-mcp computer-use-mcp
+cargo install --locked --git https://github.com/PatLeGrand/computer-use-mcp computer-use-mcp
 computer-use-mcp version
 ```
+
+This fork's npm identity is `@patlegrand/computer-use-mcp`; npm publication
+requires separate registry ownership and trusted-publisher setup. Use the
+GitHub release rather than the upstream `@mirsella` package for these changes.
 
 ## Codex and other MCP hosts
 
@@ -68,17 +86,17 @@ The server runs independently of OpenCode. Any stdio MCP host can launch
 `--compact-tools` for the six direct tools. No host-specific hooks or session
 fields are needed.
 
-The [GitHub release](https://github.com/mirsella/computer-use-mcp/releases)
+The [GitHub release](https://github.com/PatLeGrand/computer-use-mcp/releases)
 tarball contains the executable, both integrations, and the skill. Extract it
 to a permanent directory and register the packaged Codex plugin:
 
 ```sh
 codex plugin marketplace add /path/to/computer-use-mcp
-codex plugin add computer-use@computer-use-mcp
+codex plugin add computer-use@patlegrand-computer-use
 ```
 
 Both integrations enable Computer Use by default. To disable it in Codex,
-set `enabled = false` in `[plugins."computer-use@computer-use-mcp"]` in
+set `enabled = false` in `[plugins."computer-use@patlegrand-computer-use"]` in
 `~/.codex/config.toml`. In OpenCode, set the plugin option `enabled` to `false`
 or disable `mcp.computer_use`.
 
@@ -91,9 +109,11 @@ args = ["mcp", "--compact-tools"]
 tool_timeout_sec = 150
 ```
 
-The npm name remains `@mirsella/opencode-computer-use-mcp` until its separate
-migration. To use a GitHub release in OpenCode, set the plugin entry to
-`"file:///absolute/path/to/unpacked/computer-use-mcp"` instead of the npm name.
+Both desktop integrations use the packaged Python proxy to announce foreground
+calls to an already-running Activity Halo. If the companion is absent, the MCP
+continues normally; explicit pause refusals from a running companion are
+respected. `COMPUTER_USE_MCP_FEEDBACK=0` disables this optional integration.
+Target IDs route background calls without requiring another desktop selector.
 
 ## OpenCode setup
 
@@ -102,7 +122,7 @@ Add the package to your OpenCode configuration, using OpenCode 1.18 or newer:
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@mirsella/opencode-computer-use-mcp"]
+  "plugin": ["file:///absolute/path/to/unpacked/computer-use-mcp"]
 }
 ```
 
@@ -141,7 +161,7 @@ This example asks for review before each tool call:
   "mcp": {
     "computer_use": {
       "type": "local",
-      "command": ["npx", "-y", "@mirsella/opencode-computer-use-mcp", "mcp"],
+      "command": ["/absolute/path/to/unpacked/computer-use-mcp/vendor/bin/computer-use-mcp", "mcp"],
       "enabled": true,
       "timeout": 150000
     }
@@ -269,3 +289,7 @@ The portal grant may cover all outputs even though this server consumes only
 the selected stream; this option is a routing limit, not an OS permission limit.
 Without this variable, upstream behavior is preserved. Restart the MCP server
 after changing the output selection or display configuration.
+
+## Attribution
+
+This fork builds on [mirsella/computer-use-mcp](https://github.com/mirsella/computer-use-mcp). Original MIT license notices are retained.

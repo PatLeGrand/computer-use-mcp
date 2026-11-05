@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 const binary = fileURLToPath(new URL("../vendor/bin/computer-use-mcp", import.meta.url));
+const proxy = fileURLToPath(new URL("./feedback_proxy.py", import.meta.url));
 const skills = fileURLToPath(new URL("../skills", import.meta.url));
 const directTools = [
   "list_desktop", "launch_application", "activate_window", "observe", "act", "wait_for",
@@ -24,7 +25,7 @@ function requiresDirectTools(config) {
 }
 
 export default {
-  id: "@mirsella/opencode-computer-use-mcp",
+  id: "@patlegrand/computer-use-mcp",
   server: async (_input, options) => {
     const { enabled = true, compactTools = true } = options ?? {};
     if (typeof enabled !== "boolean") throw new Error("enabled must be a boolean");
@@ -35,11 +36,11 @@ export default {
         if (!config.mcp.computer_use) {
           const compact = compactTools && !requiresDirectTools(config);
           if (enabled && compactTools && !compact) {
-            console.warn("@mirsella/opencode-computer-use-mcp uses direct tools to preserve per-tool permissions");
+            console.warn("@patlegrand/computer-use-mcp uses direct tools to preserve per-tool permissions");
           }
           config.mcp.computer_use = {
             type: "local",
-            command: compact ? [binary, "mcp", "--compact-tools"] : [binary, "mcp"],
+            command: ["python3", proxy, binary, "mcp", ...(compact ? ["--compact-tools"] : [])],
             enabled,
             timeout: 150_000,
           };

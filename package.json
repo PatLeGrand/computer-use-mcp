@@ -1,6 +1,6 @@
 {
-  "name": "@mirsella/opencode-computer-use-mcp",
-  "version": "0.8.1",
+  "name": "@patlegrand/computer-use-mcp",
+  "version": "0.8.2",
   "description": "Standalone Computer Use MCP for KDE Plasma Wayland, with OpenCode and Codex integrations",
   "type": "module",
   "exports": {
@@ -20,11 +20,13 @@
     "LICENSE",
     ".codex-plugin/plugin.json",
     ".agents/plugins/marketplace.json",
-    ".mcp.json"
+    ".mcp.json",
+    "plugin/feedback_proxy.py"
   ],
   "scripts": {
     "prepack": "node scripts/package-native.mjs",
-    "test": "node --test tests/npm.test.mjs"
+    "test": "node --test tests/npm.test.mjs",
+    "prepare:skills": "node scripts/prepare-skills.mjs"
   },
   "keywords": [
     "opencode",
@@ -34,14 +36,14 @@
     "kde",
     "codex"
   ],
-  "homepage": "https://github.com/mirsella/computer-use-mcp#readme",
-  "bugs": "https://github.com/mirsella/computer-use-mcp/issues",
+  "homepage": "https://github.com/PatLeGrand/computer-use-mcp#readme",
+  "bugs": "https://github.com/PatLeGrand/computer-use-mcp/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mirsella/computer-use-mcp.git"
+    "url": "git+https://github.com/PatLeGrand/computer-use-mcp.git"
   },
   "license": "MIT",
-  "author": "mirsella",
+  "author": "PatLeGrand",
   "os": [
     "linux"
   ],
@@ -57,5 +59,8 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "contributors": [
+    "mirsella"
+  ]
 }

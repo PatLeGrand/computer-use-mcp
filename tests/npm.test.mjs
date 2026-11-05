@@ -14,6 +14,7 @@ const root = process.env.COMPUTER_USE_MCP_PACKAGE_DIR
   : new URL("../", import.meta.url);
 const manifest = JSON.parse(await readFile(new URL("package.json", root), "utf8"));
 const plugin = (await import(new URL(manifest.exports["./server"], root))).default;
+const proxy = fileURLToPath(new URL("plugin/feedback_proxy.py", root));
 const binary = fileURLToPath(new URL(manifest.bin["computer-use-mcp"], root));
 
 test("Codex packages the same standalone server and canonical skill", async () => {
@@ -24,10 +25,11 @@ test("Codex packages the same standalone server and canonical skill", async () =
   assert.equal(codex.name, "computer-use");
   assert.equal(codex.version, manifest.version);
   assert.equal(codex.skills, "./skills/");
-  assert.equal(marketplace.name, "computer-use-mcp");
+  assert.equal(marketplace.name, "patlegrand-computer-use");
   assert.equal(marketplace.plugins[0].name, codex.name);
-  assert.equal(fileURLToPath(new URL(server.command, root)), binary);
-  assert.deepEqual(server.args, ["mcp", "--compact-tools"]);
+  assert.equal(server.command, "python3");
+  assert.deepEqual(server.args, ["./plugin/feedback_proxy.py", "./vendor/bin/computer-use-mcp", "mcp", "--compact-tools"]);
+  assert.ok(manifest.files.includes("plugin/feedback_proxy.py"));
   assert.equal(server.tool_timeout_sec, 150);
   for (const file of [".codex-plugin/plugin.json", ".agents/plugins/marketplace.json", ".mcp.json"])
     assert.ok(manifest.files.includes(file), `${file} must ship in the tarball`);
@@ -41,7 +43,7 @@ test("plugin enables the bundled server and synchronized skill by default", asyn
   assert.equal(plugin.id, manifest.name);
   assert.deepEqual(config.mcp.computer_use, {
     type: "local",
-    command: [binary, "mcp", "--compact-tools"],
+    command: ["python3", proxy, binary, "mcp", "--compact-tools"],
     enabled: true,
     timeout: 150_000,
   });
@@ -61,7 +63,7 @@ test("plugin allows explicit disablement and skips the skill", async () => {
   await hooks.config(config);
   assert.deepEqual(config.mcp.computer_use, {
     type: "local",
-    command: [binary, "mcp", "--compact-tools"],
+    command: ["python3", proxy, binary, "mcp", "--compact-tools"],
     enabled: false,
     timeout: 150_000,
   });
@@ -111,13 +113,13 @@ test("compact mode respects global and agent-specific permissions and tool switc
     const hooks = await plugin.server(undefined, { enabled: true });
     await hooks.config(config);
     assert.deepEqual(config.mcp.computer_use.command, compact
-      ? [binary, "mcp", "--compact-tools"] : [binary, "mcp"], JSON.stringify(policy));
+      ? ["python3", proxy, binary, "mcp", "--compact-tools"] : ["python3", proxy, binary, "mcp"], JSON.stringify(policy));
     for (const key of Object.keys(policy)) assert.deepEqual(config[key], policy[key]);
   }
   assert.equal(warn.mock.callCount(), cases.filter(([, compact]) => !compact).length);
   const config = {};
   await (await plugin.server(undefined, { compactTools: false })).config(config);
-  assert.deepEqual(config.mcp.computer_use.command, [binary, "mcp"]);
+  assert.deepEqual(config.mcp.computer_use.command, ["python3", proxy, binary, "mcp"]);
   await assert.rejects(plugin.server(undefined, { compactTools: "false" }), /boolean/);
 });
 
@@ -125,11 +127,12 @@ async function connect(t, compact, protocolVersion = "2025-11-25") {
   const env = { ...process.env };
   const state = await mkdtemp(join(tmpdir(), "computer-use-mcp-history-"));
   env.XDG_STATE_HOME = state;
+  env.COMPUTER_USE_MCP_FEEDBACK = "0";
   t.after(() => rm(state, { recursive: true, force: true }));
   for (const key of ["WAYLAND_DISPLAY", "DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "XDG_SESSION_TYPE"]) {
     delete env[key];
   }
-  const child = spawn(binary, compact ? ["mcp", "--compact-tools"] : ["mcp"], { env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn("python3", [proxy, binary, "mcp", ...(compact ? ["--compact-tools"] : [])], { env, stdio: ["pipe", "pipe", "pipe"] });
   await once(child, "spawn");
   const closed = once(child, "close");
   t.after(async () => {

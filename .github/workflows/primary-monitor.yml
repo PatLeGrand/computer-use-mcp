@@ -38,13 +38,13 @@ jobs:
         run: |
           npm pack
           mkdir -p target/npm-package-test
-          tar -xzf mirsella-opencode-computer-use-mcp-*.tgz -C target/npm-package-test
+          tar -xzf patlegrand-computer-use-mcp-*.tgz -C target/npm-package-test
           COMPUTER_USE_MCP_PACKAGE_DIR=target/npm-package-test/package npm test
           python3 -B -m unittest discover -s scripts -p 'test_model_smoke.py'
-          sha256sum mirsella-opencode-computer-use-mcp-*.tgz > SHA256SUMS
+          sha256sum patlegrand-computer-use-mcp-*.tgz > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: primary-monitor-package
           path: |
-            mirsella-opencode-computer-use-mcp-*.tgz
+            patlegrand-computer-use-mcp-*.tgz
             SHA256SUMS

@@ -15,11 +15,24 @@ pub fn smooth_pointer_enabled() -> bool {
     std::env::var("COMPUTER_USE_MCP_SMOOTH_POINTER").as_deref() == Ok("1")
 }
 
-pub async fn cursor_position(region: &EisRegion) -> Result<(f64, f64), String> {
-    let sample = tokio::task::spawn_blocking(read_cursor)
-        .await
-        .map_err(|error| format!("cursor feedback worker failed: {error}"))??;
-    validate_cursor(region, &sample)
+pub async fn optional_trajectory(region: &EisRegion, to: (f64, f64)) -> Option<Vec<(f64, f64)>> {
+    let sample = tokio::time::timeout(
+        Duration::from_millis(350),
+        tokio::task::spawn_blocking(read_cursor),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    trajectory_from_sample(region, to, sample)
+}
+
+fn trajectory_from_sample(
+    region: &EisRegion,
+    to: (f64, f64),
+    sample: Result<Value, String>,
+) -> Option<Vec<(f64, f64)>> {
+    let from = validate_cursor(region, &sample.ok()?).ok()?;
+    trajectory(region, from, to).ok()
 }
 
 fn read_cursor() -> Result<Value, String> {
@@ -138,6 +151,23 @@ mod tests {
         sample["screen"] = json!("HDMI-A-1");
         sample["size"] = json!([960, 540]);
         assert!(validate_cursor(&region(), &sample).is_err());
+    }
+
+    #[test]
+    fn unavailable_or_unusable_feedback_skips_animation() {
+        let target = (500.0, 400.0);
+        assert!(trajectory_from_sample(&region(), target, Err("not running".into())).is_none());
+        for sample in [
+            json!({"error":"cursor unavailable"}),
+            json!({"screen":"eDP-1", "position":[100,0], "size":[1920,1080], "x":500,"y":400}),
+            json!({"screen":"HDMI-A-1", "position":[0,0], "size":[1920,1080], "x":500,"y":400}),
+        ] {
+            assert!(trajectory_from_sample(&region(), target, Ok(sample)).is_none());
+        }
+        let sample =
+            json!({"screen":"HDMI-A-1", "position":[100,0], "size":[1920,1080], "x":200,"y":100});
+        let path = trajectory_from_sample(&region(), target, Ok(sample)).unwrap();
+        assert_eq!(path.last(), Some(&target));
     }
 
     #[test]

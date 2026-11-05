@@ -1186,15 +1186,17 @@ impl InputBackend for ReisInputBackend {
                         .map_err(|_| "EIS state mutex poisoned".to_owned())?;
                     self.pointer_device_for_action(&state)?.region
                 };
-                let from = super::feedback::cursor_position(&region).await?;
-                let path = super::feedback::trajectory(&region, from, (x, y))?;
-                for (index, &(x, y)) in path.iter().enumerate() {
-                    self.emit_inner_for_mode(mode, InputEvent::Absolute { x, y })?;
-                    if index + 1 < path.len() {
-                        tokio::time::sleep(Duration::from_millis(16)).await;
+                // Animation is optional. Missing feedback or a cursor on another
+                // output must not disable the validated portal input route.
+                if let Some(path) = super::feedback::optional_trajectory(&region, (x, y)).await {
+                    for (index, &(x, y)) in path.iter().enumerate() {
+                        self.emit_inner_for_mode(mode, InputEvent::Absolute { x, y })?;
+                        if index + 1 < path.len() {
+                            tokio::time::sleep(Duration::from_millis(16)).await;
+                        }
                     }
+                    return Ok(());
                 }
-                return Ok(());
             }
             self.emit_inner_for_mode(mode, event)
         })
