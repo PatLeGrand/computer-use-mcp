@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "computer-use-mcp"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "ashpd",
  "atspi",

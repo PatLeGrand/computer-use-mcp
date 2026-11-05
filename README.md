@@ -54,7 +54,7 @@ the Python standard library. The optional Activity Halo is a separate companion.
 From this checkout, install a downloaded release with:
 
 ```sh
-python3 scripts/install-codex.py /path/to/patlegrand-computer-use-mcp-0.8.2.tgz \
+python3 scripts/install-codex.py /path/to/patlegrand-computer-use-mcp-0.8.3.tgz \
   --monitor HDMI-A-1 --smooth-pointer
 ```
 
