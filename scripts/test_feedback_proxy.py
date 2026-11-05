@@ -122,6 +122,20 @@ class ProxyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertEqual(result.stdout, '{"id":1,"method":"initialize"}\n')
 
+    def test_native_exit_closes_proxy_while_host_stdin_remains_open(self):
+        child = subprocess.Popen([sys.executable, str(PROXY), sys.executable, '-c', 'raise SystemExit(9)'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env={**os.environ, 'COMPUTER_USE_MCP_FEEDBACK': '0'})
+        try:
+            self.assertEqual(child.wait(timeout=3), 9)
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
+            child.stdin.close()
+            child.stdout.close()
+            child.stderr.close()
+
 
 if __name__ == '__main__':
     unittest.main()

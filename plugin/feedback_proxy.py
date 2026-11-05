@@ -210,27 +210,41 @@ def main():
     child = subprocess.Popen(sys.argv[1:], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                              text=True, bufsize=1)
     proxy = Proxy(child)
-    reader = threading.Thread(target=proxy.read_output, daemon=True)
-    reader.start()
-    try:
-        for line in sys.stdin:
-            try:
-                message = json.loads(line)
-            except ValueError:
-                proxy.forward(line)
-                continue
-            if isinstance(message, dict):
-                proxy.handle(message, line)
-            else:
-                proxy.forward(line)
-    finally:
+    def close_input():
         with proxy.lock:
             for item in proxy.pending.values():
                 if not item['sent']:
                     item['cancel'].set()
-        for worker in proxy.workers:
+            workers = list(proxy.workers)
+        for worker in workers:
             worker.join(timeout=3)
-        child.stdin.close()
+        with proxy.write_lock:
+            child.stdin.close()
+
+    def read_input():
+        try:
+            for line in sys.stdin:
+                try:
+                    message = json.loads(line)
+                except ValueError:
+                    proxy.forward(line)
+                    continue
+                if isinstance(message, dict):
+                    proxy.handle(message, line)
+                else:
+                    proxy.forward(line)
+        except (OSError, ValueError):
+            pass  # The native server may have exited while host input is open.
+        finally:
+            close_input()
+
+    # Read native stdout on the main thread: a crashed native server must close
+    # the host transport immediately, even while the host keeps stdin open.
+    threading.Thread(target=read_input, daemon=True).start()
+    try:
+        proxy.read_output()
+    finally:
+        close_input()
         try:
             child.wait(timeout=30)
         except subprocess.TimeoutExpired:
@@ -240,7 +254,6 @@ def main():
             except subprocess.TimeoutExpired:
                 child.kill()
                 child.wait()
-        reader.join(timeout=1)
         for item in list(proxy.pending.values()):
             proxy.end(item)
     return child.returncode
