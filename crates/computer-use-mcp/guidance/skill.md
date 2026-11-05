@@ -6,8 +6,9 @@ license: MIT
 
 # Desktop workflow
 
-1. Discover windows with `list_desktop`. To open an app, discover its installed
-   `desktop_id`, launch it, then find its window on the same desktop.
+1. Discover windows with `list_desktop`. Reuse a known installed `desktop_id`;
+   list applications only when it is unknown or launch reports it unavailable.
+   Launch the app, then find its window on the same desktop.
 2. Observe accessibility for semantic controls; request a screenshot for visual
    input. Narrow the accessibility scope before raising text or node limits.
 3. Prefer advertised `invoke` or `set_value`. Otherwise use screenshot-grounded
