@@ -59,23 +59,29 @@ fn next_session_generation(counter: &AtomicU64) -> Result<u64, String> {
 #[derive(Debug, Clone)]
 pub struct PortalConfig {
     pub persist_restore_token: bool,
+    pub monitor_mapping_id: Option<String>,
 }
 
 impl Default for PortalConfig {
     fn default() -> Self {
         Self {
             persist_restore_token: true,
+            monitor_mapping_id: None,
         }
     }
 }
 
 impl PortalConfig {
     pub fn from_env() -> Self {
-        Self::from_persistence_value(
+        let mut config = Self::from_persistence_value(
             std::env::var("COMPUTER_USE_MCP_PERSIST_PORTAL")
                 .ok()
                 .as_deref(),
-        )
+        );
+        config.monitor_mapping_id = std::env::var("COMPUTER_USE_MCP_MONITOR")
+            .ok()
+            .filter(|value| !value.is_empty());
+        config
     }
 
     fn from_persistence_value(value: Option<&str>) -> Self {
@@ -91,6 +97,7 @@ impl PortalConfig {
         };
         Self {
             persist_restore_token,
+            monitor_mapping_id: None,
         }
     }
 }
@@ -147,6 +154,7 @@ pub trait PortalBackend: Send + Sync + 'static {
 #[derive(Debug)]
 pub struct XdgPortalBackend {
     token_store: Option<RestoreTokenStore>,
+    monitor_mapping_id: Option<String>,
 }
 
 impl XdgPortalBackend {
@@ -162,12 +170,16 @@ impl XdgPortalBackend {
         } else {
             None
         };
-        Self { token_store }
+        Self {
+            token_store,
+            monitor_mapping_id: config.monitor_mapping_id,
+        }
     }
 
     pub(crate) fn persistent() -> Result<Self, String> {
         Ok(Self {
             token_store: Some(RestoreTokenStore::xdg()?),
+            monitor_mapping_id: PortalConfig::from_env().monitor_mapping_id,
         })
     }
 
@@ -287,6 +299,7 @@ impl XdgPortalBackend {
                     &screencast,
                     &session_path,
                     capabilities.available_cursor_modes,
+                    self.monitor_mapping_id.is_some(),
                     &closed,
                 )
                 .await,
@@ -325,9 +338,10 @@ impl XdgPortalBackend {
                 return Err(error.into());
             }
         };
-        let stream = parse_streams(
+        let stream = parse_streams_for_monitor(
             take_owned(&mut start_results, "streams")?,
             capabilities.screencast_version,
+            self.monitor_mapping_id.as_deref(),
         )?;
         let clipboard_enabled = match take_optional::<bool>(&mut start_results, "clipboard_enabled")
         {
@@ -1269,19 +1283,18 @@ async fn select_sources(
     screencast: &Screencast,
     session_path: &str,
     available_cursor_modes: u32,
+    per_monitor: bool,
     closed: &watch::Receiver<bool>,
 ) -> Result<(), ApprovalError> {
     let token = random_token("sources")?;
     let mut request = RawRequest::new(connection, &token).await?;
     let mut options = HashMap::new();
     options.insert("handle_token", Value::from(token));
-    // Monitor capture with a single stream. The portal offers no per-monitor
-    // selection to the app (the user picks in the chooser) and xdp-kde does
-    // not attach routing metadata for a combined-desktop stream, so a
-    // per-monitor stream with mapping_id cannot be negotiated here; the EIS
-    // layer binds routes from whatever the approved stream carries instead.
+    // KDE RemoteDesktop returns a combined workspace for multiple=false.
+    // With an explicit monitor selection, request independent streams and
+    // retain only the matching portal-issued mapping ID; never guess geometry.
     options.insert("types", Value::from(1_u32));
-    options.insert("multiple", Value::from(false));
+    options.insert("multiple", Value::from(per_monitor));
     options.insert(
         "cursor_mode",
         Value::from(cursor_mode(available_cursor_modes)?),
@@ -1675,6 +1688,32 @@ fn parse_streams(value: OwnedValue, screencast_version: u32) -> Result<PortalStr
     }
     let (node_id, properties) = streams.pop().expect("stream count checked");
     parse_stream(0, node_id, properties, screencast_version)
+}
+
+fn parse_streams_for_monitor(
+    value: OwnedValue,
+    screencast_version: u32,
+    selected_mapping_id: Option<&str>,
+) -> Result<PortalStream, String> {
+    let Some(selected_mapping_id) = selected_mapping_id else {
+        return parse_streams(value, screencast_version);
+    };
+    let streams: Vec<(u32, HashMap<String, OwnedValue>)> = value
+        .try_into()
+        .map_err(|error| format!("portal returned invalid raw stream metadata: {error}"))?;
+    let mut selected = None;
+    for (index, (node_id, properties)) in streams.into_iter().enumerate() {
+        let stream = parse_stream(index, node_id, properties, screencast_version)?;
+        if stream.mapping_id.as_deref() == Some(selected_mapping_id) {
+            if selected.is_some() {
+                return Err("portal returned duplicate selected monitor mapping IDs".into());
+            }
+            selected = Some(stream);
+        }
+    }
+    selected.ok_or_else(|| {
+        format!("portal did not supply selected monitor {selected_mapping_id:?}; refusing another screen")
+    })
 }
 
 fn parse_stream(
@@ -2250,6 +2289,69 @@ mod tests {
         assert_eq!(stream.position, Some((-1920, 0)));
         assert_eq!(stream.mapping_id.as_deref(), Some("map-1"));
         assert_eq!(stream.pipewire_serial, Some(400));
+    }
+
+    fn monitor_streams(ids: &[Option<&str>]) -> OwnedValue {
+        let streams = ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| {
+                let mut properties = HashMap::new();
+                properties.insert("source_type".to_owned(), OwnedValue::from(1_u32));
+                properties.insert(
+                    "pipewire-serial".to_owned(),
+                    OwnedValue::from(400_u64 + index as u64),
+                );
+                if let Some(id) = id {
+                    properties.insert(
+                        "mapping_id".to_owned(),
+                        OwnedValue::try_from(Value::from(*id)).unwrap(),
+                    );
+                }
+                (10_u32 + index as u32, properties)
+            })
+            .collect::<Vec<_>>();
+        OwnedValue::try_from(Value::from(streams)).unwrap()
+    }
+
+    #[test]
+    fn selected_monitor_uses_mapping_id_not_list_order() {
+        let selected = parse_streams_for_monitor(
+            monitor_streams(&[Some("eDP-1"), Some("HDMI-A-1")]),
+            6,
+            Some("HDMI-A-1"),
+        )
+        .unwrap();
+        assert_eq!(selected.node_id, 11);
+        assert_eq!(selected.stream_index, 1);
+        assert_eq!(selected.mapping_id.as_deref(), Some("HDMI-A-1"));
+        let selected = parse_streams_for_monitor(
+            monitor_streams(&[Some("HDMI-A-1"), Some("eDP-1")]),
+            6,
+            Some("HDMI-A-1"),
+        )
+        .unwrap();
+        assert_eq!(selected.node_id, 10);
+    }
+
+    #[test]
+    fn missing_or_ambiguous_monitor_never_falls_back_to_another_screen() {
+        for ids in [
+            vec![Some("eDP-1")],
+            vec![None],
+            vec![Some("HDMI-A-1"), Some("HDMI-A-1")],
+        ] {
+            assert!(parse_streams_for_monitor(monitor_streams(&ids), 6, Some("HDMI-A-1")).is_err());
+        }
+        assert!(parse_streams_for_monitor(monitor_streams(&[]), 6, Some("HDMI-A-1")).is_err());
+    }
+
+    #[test]
+    fn unconfigured_monitor_keeps_single_stream_policy() {
+        assert!(parse_streams_for_monitor(monitor_streams(&[Some("HDMI-A-1")]), 6, None,).is_ok());
+        assert!(parse_streams_for_monitor(
+            monitor_streams(&[Some("HDMI-A-1"), Some("eDP-1")]), 6, None,
+        ).is_err());
     }
 
     #[test]

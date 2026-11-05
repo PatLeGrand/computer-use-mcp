@@ -43,6 +43,7 @@ const RUNNER: &str = include_str!("../run-isolated-session.sh");
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_PIPE_FRAME: usize = 64 * 1024 * 1024;
+const MAX_IDENTITIES: usize = 65_536;
 const RETIRED_RECOVERY: &str = "Session retired; its IDs are invalid. Call list_desktop on the intended desktop, then observe a fresh target. Inspect state before repeating any action whose outcome is unknown or completed.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +51,7 @@ struct Binding {
     desktop: Desktop,
     generation: u64,
     local: String,
+    used: u64,
 }
 
 #[derive(Debug)]
@@ -57,6 +59,7 @@ struct Identities {
     next: u64,
     public: BTreeMap<String, Binding>,
     local: BTreeMap<(Desktop, u64, String), String>,
+    recency: BTreeMap<u64, String>,
 }
 
 impl Identities {
@@ -71,30 +74,74 @@ impl Identities {
 
     fn publish(&mut self, desktop: Desktop, generation: u64, local: &str, prefix: &str) -> String {
         let key = (desktop, generation, local.to_owned());
-        if let Some(public) = self.local.get(&key) {
-            return public.clone();
+        if let Some(public) = self.local.get(&key).cloned() {
+            self.touch(&public);
+            return public;
         }
-        let public = format!("{prefix}-{:016x}", self.allocate());
+        let used = self.allocate();
+        let public = format!("{prefix}-{used:016x}");
         self.public.insert(
             public.clone(),
             Binding {
                 desktop,
                 generation,
                 local: local.into(),
+                used,
             },
         );
         self.local.insert(key, public.clone());
+        self.recency.insert(used, public.clone());
         public
     }
 
+    fn touch(&mut self, public: &str) {
+        let used = self.allocate();
+        let binding = self.public.get_mut(public).expect("known identity");
+        self.recency.remove(&binding.used);
+        binding.used = used;
+        self.recency.insert(used, public.to_owned());
+    }
+
+    fn forget(&mut self, public: &str) {
+        if let Some(binding) = self.public.remove(public) {
+            self.local
+                .remove(&(binding.desktop, binding.generation, binding.local));
+            self.recency.remove(&binding.used);
+        }
+    }
+
+    fn prune(&mut self) {
+        while self.public.len() > MAX_IDENTITIES {
+            let oldest = self
+                .recency
+                .first_key_value()
+                .expect("identity recency")
+                .1
+                .clone();
+            self.forget(&oldest);
+        }
+    }
+
+    fn retire(&mut self, desktop: Desktop, generation: u64) {
+        let retired: Vec<_> = self
+            .public
+            .iter()
+            .filter(|(_, binding)| binding.desktop == desktop && binding.generation == generation)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in retired {
+            self.forget(&id);
+        }
+    }
+
     fn decode(
-        &self,
+        &mut self,
         arguments: &mut Value,
         selected: Option<Desktop>,
     ) -> Result<(Desktop, Option<u64>), RuntimeError> {
         let mut route = None;
         visit_ids(arguments, &mut |value, _| {
-            let binding = self.public.get(value).ok_or_else(stale_identity)?;
+            let binding = self.public.get(value).ok_or_else(stale_identity)?.clone();
             let identity_route = (binding.desktop, binding.generation);
             if selected.is_some_and(|desktop| desktop != binding.desktop)
                 || route.is_some_and(|previous| previous != identity_route)
@@ -104,6 +151,7 @@ impl Identities {
                 ));
             }
             route = Some(identity_route);
+            self.touch(value);
             *value = binding.local.clone();
             Ok(())
         })?;
@@ -170,6 +218,10 @@ impl Identities {
             metadata.insert("recovery".into(), json!(RETIRED_RECOVERY));
         }
         crate::runtime::annotate_mcp_result(result, &header, metadata);
+        if retired {
+            self.retire(desktop, generation);
+        }
+        self.prune();
     }
 }
 
@@ -260,6 +312,9 @@ impl Worker {
             // A user's standalone runner override must not change the worker
             // executable or protocol of the installed broker.
             command.env_remove("COMPUTER_USE_MCP_BIN");
+            // A foreground output name must not select a private desktop stream.
+            command.env_remove("COMPUTER_USE_MCP_MONITOR");
+            command.env_remove("COMPUTER_USE_MCP_SMOOTH_POINTER");
             command.env("COMPUTER_USE_MCP_PRIVATE_PORTAL_AUTH", "require");
             command
         } else {
@@ -371,6 +426,7 @@ impl DesktopBroker {
                 next: u64::from_ne_bytes(seed) >> 1,
                 public: BTreeMap::new(),
                 local: BTreeMap::new(),
+                recency: BTreeMap::new(),
             }),
             stopping: tokio::sync::watch::channel(false).0,
             history: CallHistory::new(u64::from_ne_bytes(seed)),
@@ -446,7 +502,7 @@ impl DesktopBroker {
             slot = slot.lock() => slot,
         };
         if slot.as_ref().is_some_and(|worker| worker.abandoned) {
-            stop_slot(&mut slot).await;
+            self.stop_slot(&mut slot, desktop).await;
         }
         if expected_generation.is_some_and(|generation| {
             slot.as_ref()
@@ -477,7 +533,7 @@ impl DesktopBroker {
                 result
             };
             if let Err(error) = startup {
-                stop_slot(&mut slot).await;
+                self.stop_slot(&mut slot, desktop).await;
                 return Err(error);
             }
         }
@@ -500,7 +556,7 @@ impl DesktopBroker {
                     .as_ref()
                     .is_some_and(|value| value["session_replacement_required"] == true);
                 if retire {
-                    stop_slot(&mut slot).await;
+                    self.stop_slot(&mut slot, desktop).await;
                 }
                 self.identities
                     .lock()
@@ -509,7 +565,7 @@ impl DesktopBroker {
                 Ok(result)
             }
             Err(error) => {
-                stop_slot(&mut slot).await;
+                self.stop_slot(&mut slot, desktop).await;
                 Err(worker_failure(error, mutation))
             }
         }
@@ -519,7 +575,20 @@ impl DesktopBroker {
         self.stopping.send_replace(true);
         let (mut foreground, mut background) =
             tokio::join!(self.foreground.lock(), self.background.lock());
-        tokio::join!(stop_slot(&mut foreground), stop_slot(&mut background));
+        tokio::join!(
+            self.stop_slot(&mut foreground, Desktop::Foreground),
+            self.stop_slot(&mut background, Desktop::Background)
+        );
+    }
+
+    async fn stop_slot(&self, slot: &mut Option<Worker>, desktop: Desktop) {
+        if let Some(worker) = slot.as_ref() {
+            self.identities
+                .lock()
+                .expect("identity lock poisoned")
+                .retire(desktop, worker.generation);
+        }
+        stop_slot(slot).await;
     }
 
     fn worker_slot(&self, desktop: Desktop) -> &tokio::sync::Mutex<Option<Worker>> {
@@ -629,6 +698,7 @@ fn worker_failure(error: impl std::fmt::Display, mutation: bool) -> RuntimeError
 struct McpServer {
     broker: Arc<DesktopBroker>,
     tools: &'static [Tool],
+    compact_results: bool,
 }
 
 impl ServerHandler for McpServer {
@@ -677,8 +747,14 @@ impl ServerHandler for McpServer {
             }
             Err(error) => tool_error_result(&error),
         };
+        let structured = supports_structured_content(&context);
+        let result = if structured && self.compact_results {
+            crate::runtime::compact_model_result(result)
+        } else {
+            result
+        };
         record.finish(&result);
-        Ok(for_protocol(result, supports_structured_content(&context)))
+        Ok(for_protocol(result, structured))
     }
 }
 
@@ -686,6 +762,8 @@ pub async fn serve_stdio(compact_tools: bool) -> Result<(), CliError> {
     let broker = Arc::new(DesktopBroker::new()?);
     let server = McpServer {
         broker: Arc::clone(&broker),
+        compact_results: compact_tools
+            && std::env::var("COMPUTER_USE_MCP_COMPACT_OUTPUT").as_deref() == Ok("1"),
         tools: if compact_tools {
             compact_tool_definitions()
         } else {
@@ -839,6 +917,52 @@ mod tests {
     use crate::runtime::{ActionProgress, ToolOutput};
     use crate::validation::ToolCall;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    #[test]
+    fn identity_retention_is_bounded_and_keeps_recent_references() {
+        let broker = DesktopBroker::new().unwrap();
+        let mut ids = broker.identities.lock().unwrap();
+        let old = ids.publish(Desktop::Foreground, 1, "obs-old", "obs");
+        let target = ids.publish(Desktop::Foreground, 1, "win-active", "win");
+        for index in 0..MAX_IDENTITIES + 10 {
+            ids.publish(Desktop::Foreground, 1, &format!("e-{index}"), "e");
+            assert_eq!(
+                ids.publish(Desktop::Foreground, 1, "win-active", "win"),
+                target
+            );
+            ids.prune();
+        }
+        assert_eq!(ids.public.len(), MAX_IDENTITIES);
+        assert_eq!(ids.local.len(), MAX_IDENTITIES);
+        assert_eq!(ids.recency.len(), MAX_IDENTITIES);
+        assert!(
+            ids.decode(&mut json!({"observation_id":old}), None)
+                .is_err()
+        );
+        let mut arguments = json!({"window_instance_id":target});
+        assert_eq!(
+            ids.decode(&mut arguments, None).unwrap(),
+            (Desktop::Foreground, Some(1))
+        );
+        assert_eq!(arguments["window_instance_id"], "win-active");
+        let new = ids.publish(Desktop::Foreground, 1, "obs-old", "obs");
+        assert_ne!(new, old, "evicted identities must never be reused");
+    }
+
+    #[test]
+    fn retiring_identities_preserves_other_worker_generations() {
+        let broker = DesktopBroker::new().unwrap();
+        let mut ids = broker.identities.lock().unwrap();
+        let old = ids.publish(Desktop::Foreground, 1, "win-one", "win");
+        let background = ids.publish(Desktop::Background, 2, "win-one", "win");
+        let fresh = ids.publish(Desktop::Foreground, 3, "win-one", "win");
+        ids.retire(Desktop::Foreground, 1);
+        assert!(!ids.public.contains_key(&old));
+        assert!(ids.public.contains_key(&background));
+        assert!(ids.public.contains_key(&fresh));
+        assert_eq!(ids.local.len(), 2);
+        assert_eq!(ids.recency.len(), 2);
+    }
 
     // A real subprocess with deliberately colliding local IDs. It echoes
     // received arguments rather than implementing any broker routing logic.

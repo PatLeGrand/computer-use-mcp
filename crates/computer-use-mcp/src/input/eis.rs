@@ -1175,6 +1175,29 @@ impl InputBackend for ReisInputBackend {
         Box::pin(async move {
             let _serial = self.serial.lock().await;
             let mode = self.transaction_mode()?;
+            if mode == InputMode::Pointer
+                && super::feedback::smooth_pointer_enabled()
+                && let InputEvent::Absolute { x, y } = event
+            {
+                let region = {
+                    let state = self
+                        .state
+                        .lock()
+                        .map_err(|_| "EIS state mutex poisoned".to_owned())?;
+                    self.pointer_device_for_action(&state)?.region
+                };
+                // Animation is optional. Missing feedback or a cursor on another
+                // output must not disable the validated portal input route.
+                if let Some(path) = super::feedback::optional_trajectory(&region, (x, y)).await {
+                    for (index, &(x, y)) in path.iter().enumerate() {
+                        self.emit_inner_for_mode(mode, InputEvent::Absolute { x, y })?;
+                        if index + 1 < path.len() {
+                            tokio::time::sleep(Duration::from_millis(16)).await;
+                        }
+                    }
+                    return Ok(());
+                }
+            }
             self.emit_inner_for_mode(mode, event)
         })
     }

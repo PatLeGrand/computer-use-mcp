@@ -1,11 +1,11 @@
 {
   "name": "computer-use",
-  "version": "0.8.1",
+  "version": "0.8.3",
   "description": "Operate a KDE Wayland desktop through the standalone Computer Use MCP server.",
   "author": {
-    "name": "mirsella"
+    "name": "PatLeGrand"
   },
-  "repository": "https://github.com/mirsella/computer-use-mcp",
+  "repository": "https://github.com/PatLeGrand/computer-use-mcp",
   "license": "MIT",
   "skills": "./skills/"
 }

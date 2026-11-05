@@ -47,19 +47,19 @@ jobs:
       - name: Test the packed plugin and MCP executable
         run: |
           mkdir -p target/npm-package-test
-          tar -xzf mirsella-opencode-computer-use-mcp-*.tgz -C target/npm-package-test
+          tar -xzf patlegrand-computer-use-mcp-*.tgz -C target/npm-package-test
           COMPUTER_USE_MCP_PACKAGE_DIR=target/npm-package-test/package npm test
-          python3 -B -m unittest discover -s scripts -p 'test_model_smoke.py'
+          python3 -B -m unittest discover -s scripts -p 'test_*.py'
           ldd target/npm-package-test/package/vendor/bin/computer-use-mcp
 
       - name: Checksum release package
-        run: sha256sum mirsella-opencode-computer-use-mcp-*.tgz > SHA256SUMS
+        run: sha256sum patlegrand-computer-use-mcp-*.tgz > SHA256SUMS
 
       - uses: actions/upload-artifact@v7
         with:
           name: npm-package
           path: |
-            mirsella-opencode-computer-use-mcp-*.tgz
+            patlegrand-computer-use-mcp-*.tgz
             SHA256SUMS
           if-no-files-found: error
 
@@ -82,4 +82,4 @@ jobs:
       - name: Publish with npm trusted publishing
         env:
           NPM_TAG: latest
-        run: npm publish ./mirsella-opencode-computer-use-mcp-*.tgz --access public --tag "$NPM_TAG"
+        run: npm publish ./patlegrand-computer-use-mcp-*.tgz --access public --tag "$NPM_TAG"

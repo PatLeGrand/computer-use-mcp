@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "computer_use": {
-      "command": "./vendor/bin/computer-use-mcp",
+      "command": "python3",
       "args": [
+        "./plugin/feedback_proxy.py",
+        "./vendor/bin/computer-use-mcp",
         "mcp",
         "--compact-tools"
       ],
@@ -26,8 +28,15 @@
         "COMPUTER_USE_MCP_TAKEOVER_FILE",
         "COMPUTER_USE_MCP_INPUT_DEVICES",
         "COMPUTER_USE_MCP_PERSIST_PORTAL",
-        "COMPUTER_USE_MCP_KDE_WINDOW_MANAGEMENT"
-      ]
+        "COMPUTER_USE_MCP_KDE_WINDOW_MANAGEMENT",
+        "COMPUTER_USE_MCP_MONITOR",
+        "COMPUTER_USE_MCP_SMOOTH_POINTER",
+        "COMPUTER_USE_MCP_FEEDBACK",
+        "HALO_AGENT"
+      ],
+      "env": {
+        "COMPUTER_USE_MCP_COMPACT_OUTPUT": "1"
+      }
     }
   }
 }

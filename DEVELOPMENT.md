@@ -41,9 +41,11 @@ does not require a Cargo or npm installation into PATH.
 RUSTC_BOOTSTRAP=1 RUSTFLAGS= CARGO_ENCODED_RUSTFLAGS= \
 CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm \
 cargo +1.97.0 build --locked -p computer-use-mcp
+node scripts/prepare-skills.mjs
 mkdir -p vendor/bin
 ln -sfn ../../target/debug/computer-use-mcp vendor/bin/computer-use-mcp
 node --test tests/npm.test.mjs
+python3 -B -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 The symlink is a checkout-only build artifact. The Node tests load the local
@@ -218,7 +220,7 @@ Linux/KDE environment, not a claim of support for every platform.
 
 ### npm packaging and releases
 
-`@mirsella/opencode-computer-use-mcp` ships the Linux x64 GNU executable, an
+`@patlegrand/computer-use-mcp` ships the Linux x64 GNU executable, an
 OpenCode adapter, Codex plugin, and a copy of the canonical skill. `npm pack` uses
 `cargo install` to build the release executable into `vendor/bin` and copies
 the canonical skill. Cargo and npm versions must match.
@@ -238,10 +240,11 @@ Push the release commit to main and wait for CI. Dispatch `release.yml` with
 that full `commit` SHA to publish the tested artifact to GitHub Releases.
 The workflow verifies that the pinned commit is still main.
 
-The npm name remains unchanged. npm publishing requires an explicit
-`publish.yml` dispatch with `publish_npm=true`. Its trusted publisher is
-`mirsella/computer-use-mcp`, workflow `publish.yml`, without an environment.
-The job uses OIDC and needs no npm token.
+The fork uses the npm identity `@patlegrand/computer-use-mcp`. GitHub Releases
+are the distribution path. Before enabling `publish_npm=true`, configure scope
+ownership and the registry trusted publisher for `PatLeGrand/computer-use-mcp`,
+workflow `publish.yml`, without an environment. No npm publication is required
+for local Codex updates.
 
 ### Native CLI
 

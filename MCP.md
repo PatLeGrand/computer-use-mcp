@@ -382,7 +382,7 @@ Human idle:
 ```
 
 This targetless, foreground-only condition does not accept `desktop`. It waits
-until 60 seconds have passed since the last detected physical activity, all
+until 5 seconds have passed since the last detected physical activity, all
 observed physical keys and buttons are released, and no cooperative handoff
 signal is asserted. New activity restarts the quiet period. Clearing a handoff
 signal starts a fresh quiet period. A newly started monitor with no detected
@@ -426,7 +426,7 @@ attempts held-input cleanup and desktop restoration. The interrupted operation
 stays aborted. Outcomes retain actual dispatch progress; cleanup cannot retract
 delivered input. Read-only discovery, observation, and waits remain available.
 
-After the 60-second quiet period, a new mutation may proceed without restarting
+After the 5-second quiet period, a new mutation may proceed without restarting
 MCP. Observations from before or during the pause become stale. Use
 `wait_for human_idle`, then observe again, or hand control to the user. Background
 use requires the user's request; human activity never changes the desktop route.
@@ -495,3 +495,58 @@ or retry semantics. `doctor` reports the history directory.
 | Coordinates are invalid | Use the returned PNG dimensions and half-open bounds from the exact source frame. |
 | Outcome is `unknown` or `completed` | Observe current state before deciding whether another action is needed. |
 | `HumanInputBusy` | Pause foreground actions. Wait for `human_idle`, then observe fresh state; no restart is needed. Clear an asserted handoff signal before resuming. |
+
+## Select one physical monitor (PatLeGrand fork)
+
+Set `COMPUTER_USE_MCP_MONITOR=HDMI-A-1` before starting the foreground MCP
+server to capture and control only that output while other displays stay on.
+Use the output name shown by `kscreen-doctor -o`. This is an explicit output
+selection, not an automatic primary-monitor detector; update it if the primary
+output changes.
+
+On KDE, the server requests separate monitor streams and selects the exact
+portal-provided `mapping_id`. Missing or duplicate IDs fail closed. It does not
+infer coordinates from a screenshot or crop a combined desktop. Existing EIS
+routing, consent, stale-frame checks and input cleanup remain active. Private
+background workers do not inherit this foreground output selection.
+
+The portal grant may cover all outputs even though this server consumes only
+the selected stream; this option is a routing limit, not an OS permission limit.
+Without this variable, upstream behavior is preserved. Restart the MCP server
+after changing the output selection or display configuration.
+
+## Optional smooth pointer feedback (PatLeGrand fork)
+
+`COMPUTER_USE_MCP_SMOOTH_POINTER=1` enables animated absolute pointer events
+through the existing portal/EIS route. The optional Activity Halo companion can
+provide a live cursor position on its private runtime socket.
+The reported output name and geometry must exactly match the bound EIS region.
+Animation requires the current position and destination inside that region.
+Missing, invalid or mismatched feedback skips animation and uses the normal
+validated EIS move instead. Feedback sampling has a 350 ms deadline.
+Private background workers do not inherit this option.
+
+Generated input is interpolated at approximately 60 Hz, with bounded duration,
+while retaining session checks, serialized input and cancellation cleanup.
+The companion is a local, same-user position provider; it does not grant portal
+permissions or send input. This opt-in integration adds a trust dependency on
+the companion and is not a guarantee of detecting physical user takeover.
+
+Broker identity retention is limited to 65,536 recently used references per
+connection. Evicted references fail as stale and require fresh discovery or
+observation. Retiring a worker removes all references belonging to its generation.
+
+## Compact output for structured-content clients
+
+The Codex manifest enables `COMPUTER_USE_MCP_COMPACT_OUTPUT=1`. With compact
+tools and a structured-capable MCP protocol, successful replies keep their full
+JSON evidence and image but replace the duplicate text tree with a short marker.
+Errors and older protocol versions keep their full recovery text. Direct tools
+and OpenCode retain the existing text projection by default. Clients enabling
+this option must display `structuredContent` to the model. Replacement observation
+IDs, elements, frames, dispatch and cleanup evidence are unchanged: reuse them
+for the next action rather than issuing a redundant observe.
+
+The optional halo end acknowledgement is performed after delivery of the native
+result, avoiding up to 350 ms of extra response latency when that socket stalls.
+The start warning and pause checks remain before dispatch.
