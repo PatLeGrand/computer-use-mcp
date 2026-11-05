@@ -33,7 +33,10 @@
         "COMPUTER_USE_MCP_SMOOTH_POINTER",
         "COMPUTER_USE_MCP_FEEDBACK",
         "HALO_AGENT"
-      ]
+      ],
+      "env": {
+        "COMPUTER_USE_MCP_COMPACT_OUTPUT": "1"
+      }
     }
   }
 }

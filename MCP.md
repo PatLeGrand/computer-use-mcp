@@ -535,3 +535,18 @@ the companion and is not a guarantee of detecting physical user takeover.
 Broker identity retention is limited to 65,536 recently used references per
 connection. Evicted references fail as stale and require fresh discovery or
 observation. Retiring a worker removes all references belonging to its generation.
+
+## Compact output for structured-content clients
+
+The Codex manifest enables `COMPUTER_USE_MCP_COMPACT_OUTPUT=1`. With compact
+tools and a structured-capable MCP protocol, successful replies keep their full
+JSON evidence and image but replace the duplicate text tree with a short marker.
+Errors and older protocol versions keep their full recovery text. Direct tools
+and OpenCode retain the existing text projection by default. Clients enabling
+this option must display `structuredContent` to the model. Replacement observation
+IDs, elements, frames, dispatch and cleanup evidence are unchanged: reuse them
+for the next action rather than issuing a redundant observe.
+
+The optional halo end acknowledgement is performed after delivery of the native
+result, avoiding up to 350 ms of extra response latency when that socket stalls.
+The start warning and pause checks remain before dispatch.

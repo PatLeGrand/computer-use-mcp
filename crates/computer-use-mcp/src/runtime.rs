@@ -627,3 +627,44 @@ mod progress_tests {
         assert_eq!(progress.snapshot().dispatch_stage, DispatchStage::Completed);
     }
 }
+
+/// Structured-capable compact clients need one copy of the evidence, not the
+/// full text renderer followed by the same accessibility tree in JSON.
+pub(crate) fn compact_model_result(mut result: CallToolResult) -> CallToolResult {
+    if result.is_error == Some(true) || result.structured_content.is_none() {
+        return result;
+    }
+    for content in &mut result.content {
+        if let ContentBlock::Text(text) = content {
+            text.text = "Result in structuredContent.".into();
+        }
+    }
+    result
+}
+
+#[cfg(test)]
+mod compact_output_tests {
+    use super::*;
+
+    #[test]
+    fn compact_output_preserves_evidence_images_and_error_recovery() {
+        let output = ToolOutput::text("repeated accessibility text ".repeat(400))
+            .with_structured_content(serde_json::json!({
+                "replacement_observation":{"observation_id":"obs-1","elements":[{"element_id":"e-1","text":"verified"}]},
+                "action_progress":{"dispatch_stage":"completed","cleanup":"completed"}
+            }))
+            .with_png_base64("image-data");
+        let original = output.into_mcp_result();
+        let compact = compact_model_result(original.clone());
+        assert_eq!(compact.structured_content, original.structured_content);
+        assert_eq!(compact.content[1], original.content[1]);
+        assert!(
+            serde_json::to_vec(&compact).unwrap().len()
+                < serde_json::to_vec(&original).unwrap().len() / 10
+        );
+        let error = tool_error_result(&RuntimeError::invalid_arguments(
+            "retry with a fresh reference",
+        ));
+        assert_eq!(compact_model_result(error.clone()), error);
+    }
+}

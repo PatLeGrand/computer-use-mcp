@@ -698,6 +698,7 @@ fn worker_failure(error: impl std::fmt::Display, mutation: bool) -> RuntimeError
 struct McpServer {
     broker: Arc<DesktopBroker>,
     tools: &'static [Tool],
+    compact_results: bool,
 }
 
 impl ServerHandler for McpServer {
@@ -746,8 +747,14 @@ impl ServerHandler for McpServer {
             }
             Err(error) => tool_error_result(&error),
         };
+        let structured = supports_structured_content(&context);
+        let result = if structured && self.compact_results {
+            crate::runtime::compact_model_result(result)
+        } else {
+            result
+        };
         record.finish(&result);
-        Ok(for_protocol(result, supports_structured_content(&context)))
+        Ok(for_protocol(result, structured))
     }
 }
 
@@ -755,6 +762,8 @@ pub async fn serve_stdio(compact_tools: bool) -> Result<(), CliError> {
     let broker = Arc::new(DesktopBroker::new()?);
     let server = McpServer {
         broker: Arc::clone(&broker),
+        compact_results: compact_tools
+            && std::env::var("COMPUTER_USE_MCP_COMPACT_OUTPUT").as_deref() == Ok("1"),
         tools: if compact_tools {
             compact_tool_definitions()
         } else {

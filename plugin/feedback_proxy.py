@@ -196,7 +196,11 @@ class Proxy:
                             while len(self.routes) > 65536:
                                 self.routes.pop(next(iter(self.routes)))
                 if item:
+                    # Deliver the MCP result before waiting for optional visual
+                    # feedback acknowledgement (up to 350 ms).
+                    self.output(line)
                     self.end(item)
+                    return
         except (ValueError, TypeError, AttributeError):
             pass
         self.output(line)
