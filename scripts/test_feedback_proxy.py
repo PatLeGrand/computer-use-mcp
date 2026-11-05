@@ -114,6 +114,27 @@ class ProxyTests(unittest.TestCase):
             self.join()
         self.assertNotIn('secret', str(feedback.call_args_list))
 
+    def test_result_arrives_before_slow_halo_end_acknowledgement(self):
+        delivered = threading.Event()
+        release = threading.Event()
+        waiting = threading.Event()
+        self.proxy.output = lambda line: delivered.set()
+        self.proxy.pending['1'] = {'call': 'call-1', 'route': 'foreground'}
+        def feedback(*args):
+            waiting.set()
+            release.wait(2)
+            return {'ok': True}
+        with patch.object(module, 'feedback', feedback):
+            response = json.dumps({'id': 1, 'result': {'content': []}}) + '\n'
+            worker = threading.Thread(target=self.proxy.receive, args=(response,))
+            worker.start()
+            try:
+                self.assertTrue(waiting.wait(1))
+                self.assertTrue(delivered.is_set(), 'halo end must not delay delivery')
+            finally:
+                release.set()
+                worker.join(2)
+
     def test_stdio_and_exit_status_without_halo(self):
         child_code = 'import sys; [print(line.strip(), flush=True) for line in sys.stdin]; sys.exit(7)'
         result = subprocess.run([sys.executable, str(PROXY), sys.executable, '-u', '-c', child_code],
